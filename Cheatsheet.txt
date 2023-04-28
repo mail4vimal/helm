@@ -1,0 +1,404 @@
+helm repo list
+helm repo add bitnami https://charts.bitnami.com/bitnami
+helm repo list
+helm repo remove bitnami
+helm repo add bitnami https://charts.bitnami.com/bitnami
+
+Search the repository:
+
+helm search repo mysql
+helm search repo database
+helm search repo database --versions
+
+Install a package:
+
+kubectl get pods
+
+(Below Two commands - In a Different Shell/Commandline window/tab)
+
+minikube ssh
+docker images
+helm install mydb bitnami/mysql
+
+Check the cluster:
+
+kubectl get pods
+minikube ssh
+docker images
+
+To check the installation status:
+helm status mydb
+--------------------------------------------
+To Upgrade:
+
+ROOT_PASSWORD=$(kubectl get secret --namespace default mydb-mysql -o jsonpath="{.data.mysql-root-password}" | base64 --decode)
+helm upgrade --namespace default mysql-release bitnami/mysql --set auth.rootPassword=$ROOT_PASSWORD
+-------
+helm uninstall mysql-release 
+--------------------------------------------
+Passing the Custom Variables into the cluster (Manually)
+
+Option #1
+helm install mydb bitnami/mysql --set auth.rootPassword = test1234
+
+Option #2
+helm install mydb bitnami/mysql --values values.yaml
+
+cat values.yaml
+auth:
+  rootPassword: "test1234"
+
+
+
+#Upgrade
+
+helm repo update
+
+Update the installations "helm status mydb" upgrade instructions will be there in the end (In this case , extract the mysql root password and set it back with upgrade)
+
+helm upgrade -n <ns> mydb bitnami/mysql --set auth.rootPassword=$ROOT_PASSWORD
+
+When upgrading the application, should use the custom varibales which are passed during the install of it ,else it will be force moved to default config
+
+Alternate for that is 
+
+#helm upgrade mydb bitnami/mysql --reuse-values
+
+Helm maintains the release records as secrets in k8s, When ever install/upgrade happens it creates the record ( secret)
+If you uninstall the application it will remove the secrets from k8s as well , it retain that 
+
+helm uninstall mydb --keep-history 
+
+helm install mydb bitnami/mysql --dry-run   ##A active kubectl connection is required + cant use the o/p command to use directly on k8s
+
+helm template mydb bitnami/mysql --values=values.yaml  ## Does not needs a active kubectl connection   ( Alwyas acts like a installation ) charts have any function which fetches the data from the k8s ,for templates it will be default value
+
+helm get notes mydb
+helm get values mydb   ## All the custom values which are used with installation ( either by --set or by --values )
+helm get values mydb --all ## For all values
+helm get values mydb --revision 1  ## For a specific versions
+helm get manifest mydb ## fetches the manifest of the resources which are created ( can reuse directly to k8s using the kubectl )
+helm get manifest --revision 2 
+helm history mydb
+helm rollback mydb 1   ( As far the helm secrets are available , we can rollback --keep-history  with uninstall Option)
+
+helm install mywebserver bitnami/apache --namespace mynamespace --create-namespace
+
+helm upgrade --install mywebserver bitnami/apache ( attempts to upgrade first , if its not present it will install )
+
+helm  install bitnami/apache --generate-name 
+helm  install bitnami/apache --generate-name --name-template "mywebserver-{{randAlpha 7 | lower}}"
+
+helm install mywebserver bitnami/apache --wait  ## will wait till create of the resources inside the k8s , default wait time is 5mins)
+helm install mywebserver bitnami/apache --wait --timeout 5m10s
+
+helm install mywebserver bitnami/apache --atomic --wait   ## If the installation / upgrade is failed it will automatically rollback to previous sucessful version
+
+helm upgrade mywebserver bitnami/apache --force # when upgrading default behaviour is just to restart pods ,those which values are changed but with this option we can force to do the restart 
+helm upgrade mywebserver bitnami/apache --cleanup-on-failure ## it will clean up the all resources which are created part of the upgrade
+
+---
+
+helm create <chart_name>  # Default takes the nginx image
+helm install firstapp <chart_location>
+
+helm package <package_dir>   # it will create the tar.gz file with name of chart with version 
+helm package <package_dir> --dependencies-update  # download the dependency package and put under the charts directory 
+helm package <package_dir> -d <destination_dir> 
+
+
+.helmignore ## helm package command ignores the files when packaging the helm repo
+
+helm lint ## to check the syntatical /indentation problems  ( Info & Warning will give a exit code 0 )
+
+------------
+
+https://helm.sh/docs/chart_template_guide/function_list/
+
+Template :
+
+actions ===>   {{ include "firstchart.fullname" . }}
+               {{- include "firstchart.labels" . | nindent 4 }}    ##  "-" which will help to remove any trailing or leading white spaces  
+               {{.values.my.custom.data }}    # It get the information from the files 
+               {{.chart.Name}}
+               {{.chart.AppVersion}}
+               {{.chart.Annotations}}
+               {{ .Release.Name }}       ### Dynamic Information 
+               {{ .Release.Namespace}}
+               {{ .Release.IsInstall}}
+               {{ .Release.IsUpgrade}}
+               {{ .Release.Service}}
+               {{ .Template.Name}}     ### Dynamic Information 
+               {{ .Template.BasePath}}
+
+               {{ - include "firstchart.labels" . | nindent 4 }}  ## o/p of the first expression/command into second command/expression
+               {{ .Values.my.custom.data | default "testdefault" | upper | quota }} ## If the first expression does not have any value , then it will take the default value which is provided there 
+               {{ - toYaml . | nindent 8 }}  ## By default the values will be objects , -toYaml will convert that into the yaml object 
+
+
+               {{ - if .Values.my.flag}}
+               {{ "Output of if" | nindent 2 }}
+               {{ - end }}
+
+               {{ - if .Values.my.flag}}
+               {{ "Output of if" | nindent 2 }}
+               {{ - else }}
+               {{ "Output of else" | nindent 2}}
+               {{ - end }}
+
+               {{ - if not .Values.autoscaling.enabled }}
+               
+               my:
+                flag: false
+                values:
+                   - usa 
+                   - india 
+                   - uk 
+                   
+               {{ -with .Values.my.values}}
+               {{- toYaml . | nindent 2 }}   ## If use . it will take the full array values , to use the actual root $. can be used 
+               {{- end}}
+
+Variables ===>   {{ $myFLAG := "true" }}   ###  ":=" for the first time assigment "=" for the reuse
+                 {{ -if $myFLAG }} ## If a variable is re-using then the type of the remain in all same ( if its defined as text in the begining and then reassigning to another it will not work)
+                 
+                 my:
+                flag: false
+                values:
+                   - usa 
+                   - india 
+                   - uk 
+                   
+               {{ -range .Values.my.values}}
+                  - {{ . | upper }}   ## If use . it will take the full array values , to use the actual root $. can be used 
+               {{- end}}
+
+               
+               image:
+                 repository: nginx
+                 pullPolicy: IfNotPresent
+                 # Overrides the image tag whose default is the chart appVersion.
+                tag: ""
+              
+               {{ -range $key,$value := .Values.image }}
+                  - {{$key}}: {{$value}}
+               {{- end}}
+               
+Advanced charts
+
+>> Adding depended charts
+>> Helm Hooks
+>> Test charts
+
+Adding the depended charts 
+    Add the following entries to the chart.yaml
+
+    dependencies:
+      - name: mysql
+        version: "8.8.6"
+        repository: "https://charts.bitnami.com/bitnami"  ## If repo is already added using helm repo add command , can use @reponame 
+
+    # helm dependency update firstchart
+       Lock file generated chart.lock
+
+       version: ">= 8.8.6  and =< 9.0.0"
+
+       ^ 1.3.4 >= 1.3.4 < 2.0.0
+       ^ 1.3.x >= 1.3.0 < 2.0.0
+       ^ 2.x >= 2.0.0 < 3
+       ^ 0.2.4 >= 0.2.4 < 0.3.0
+       ^ 0 >= 0.0.0 < 1.0.0
+
+https://att-c.udemycdn.com/2022-02-22_04-38-01-ad0b70725d3bfddb8aa4488491edd819/original.zip?response-content-disposition=attachment%3B+filename%3DHelm%2BSlides.zip&Expires=1682539687&Signature=VJ~KnWUsCgEyfpdvXj2Z71lEf3sqFABIIr99u0ppWiMb2aDsrnnX7ix0eazZCQzNQx8jZ9s4tvhU9m7A2SA2GdvDv2rYmZt4n6VUcCmK-P7i3I6neG07uDqgWzVEaErQAMyAquKdKLjbyhPJajYFouYNW~DzTDogw8kKNuNlDHHgyrjfpYlYwtVQ8q8BEoClmsb8MSEE7hbAdtpmC8JMHk3uWcpTG~L9dQQjQn6Pk8bEMDV4ZUvYz4xN1K4wKYz3qEACWX2YUvCPuEymNit~EcR7aDT9lfoo9NA9LLY5y6zaZ70luY6PcYO54gVr~zY0Wx0qP~SNCX1yxkTSZUACDw__&Key-Pair-Id=APKAITJV77WS5ZT7262A
+
+      ~ 1.3.4 >= 1.3.4 < 1.4.0
+      ~ 2 >= 2 < 3
+      ~ 2.3 >= 2.3 < 2.4
+
+      dependencies:
+      - name: mysql
+        version: "8.8.6"
+        repository: "https://charts.bitnami.com/bitnami"
+        condition: mysql.enabled     # if you wanted to enabled the conditional dependency install
+      
+      mysql:
+        enabled: false    ### in the values.yaml
+
+      dependencies:
+      - name: mysql
+        version: "8.8.6"
+        repository: "https://charts.bitnami.com/bitnami"
+        tags:
+         - enabled     # if you wanted to enabled the conditional dependency install
+      
+      tags:
+        enabled: false    ### in the values.yaml   , we can use tag in multiple depencies unlike the condition
+
+       >> Overriding the values in the depended chart.: >  edit the values.yaml of the main chart and add the following
+
+        <depended_chartname>:     ## for eg , mysql from the previous eg. 
+            auth:
+              rootPassword: test1234
+            primary:
+               service:
+                  type: NodePort
+                  nodePort: 30788
+
+Read the values from the child chart to parent chart .
+
+Explicit way ( if the values are export from child chart)
+
+what is required to achive this : --> child chart's values should have explictly export on child charts values.yaml  + in the values.yaml for the part chart should have following entry :
+       
+       Sample child charts export entry :
+
+        export:
+          service:
+            port: 8080
+
+      Entry on the values.yaml in parent chart :
+
+       dependencies:
+      - name: mysql
+        version: "8.8.6"
+        repository: "https://charts.bitnami.com/bitnami"
+        tags:
+         - enabled    
+        import-values: 
+          - service
+
+      Now you can use the values in the parent chart 
+
+      {{ .Values.service.type}}
+
+If the values are not export out explictly:
+
+dependencies:
+      - name: mysql
+        version: "8.8.6"
+        repository: "https://charts.bitnami.com/bitnami"
+        tags:
+         - enabled    
+        import-values: 
+          - child: primary.service
+            parent: mysqlService
+
+Now you can use the values in the parent chart 
+
+      {{ .Values.mysqlService.type}}
+
+
+Hooks :
+   If you wanted to take some special action during the helm release cycle , can include the hooks . (will be inside charts folder) any kubernetes resource can be configured as hook . 
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: "{{ include "firstchart.fullname" . }}-pre-install"
+  annotations:
+    "helm.sh/hook": pre-install     ## this will idenfy the resource as hook
+    ###"helm.sh/hook": pre-install,post-rollback    #### Can be used multiple if needed 
+    "helm.sh/hook-weight": "1"      ## this will idenfy the hook order ( if there many hooks configured)
+    "helm.sh/hook-delete-policy": before-hook-creation
+spec:
+  containers:
+    - name: pre-install
+      image: busybox
+      imagePullPolicy: IfNotPresent
+      command: ['sh', '-c', 'echo Pod is Running']
+  restartPolicy: OnFailure
+
+
+  Life cycle where , we can configure the hooks 
+
+  pre-install
+  post-install
+  pre-delete 
+  pre-upgrade 
+  pre-rollback 
+  post-rollback 
+  test 
+  ---
+
+  Hook Cleanup values 
+
+  before-hook-creation    ## default 
+  hook-succeeded 
+  hook-failed 
+
+  ---
+
+  Testing chart release cycle 
+
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: "{{ include "firstchart.fullname" . }}-test-connection"
+  labels:
+   {{- include "firstchart.labels" .| nindent 4 }} 
+  annotations:
+    "helm.sh/hook": test     ## this will idenfy the resource as hook
+    
+spec:
+  containers:
+    - name: wget 
+      image: busybox
+      command: ['wget']
+      args: ['{{ include "firstchart.fullname" .}}:{{ .Values.service.port }}']
+  restartPolicy: OnFailure
+
+  #helm test <release_name>
+
+------
+
+Helm repo
+
+#helm repo index <directory>  # it will intialize it , there will not be any content 
+#helm package <chart> -d  <directory>
+#helm repo index <directory>    ## as soon as the context available on the directory, with this command it will update the index 
+
+
+start webserver using the python 
+cd <directory>
+python3 -m http.server --bind 127.0.0.1 8080 
+
+helm repo add localrepo http://localhost:8080
+
+helm install firstapp localrepo/firstchart
+
+helm pull localrepo/firstchart   ## to pull the packaged chart 
+
+helm repo update ## to update cache for the repo
+
+
+git add .
+git commit -m "first commit"
+git push 
+
+HELM_EXPERIMENTAL_OCI=1  ## by default on helm 3.x 
+
+OCI registary 
+
+docker run -d --name oci-registry -p 5000:5000 registry
+helm package firstchart
+helm push firstchart-0.1.0.tgz oci://localhost:5000/helm-charts
+helm show all oci://localhost:5000/helm-charts/firstchart --version 0.1.0
+helm pull oci://localhost:5000/helm-charts/firstchart --version 0.1.0
+helm template myrelease oci://localhost:5000/helm-charts/firstchart --version 0.1.0
+helm install myrelease oci://localhost:5000/helm-charts/firstchart --version 0.1.0
+helm upgrade myrelease oci://localhost:5000/helm-charts/firstchart --version 0.2.0
+helm registry login -u myuser <oci registry>
+helm registry logout <oci registry url>
+
+Charts security
+
+PGP - Gnu PG 
+
+gpg --full-generate-key    ## type of key RSA and RSA , Keysize 3072 ,
+
+KBX to gpg conversion  ( KBX format is not supported in helm // need to revalidate )
+
+gpg --export-secret-keys > ~/secring.gpg 
+
+

@@ -395,10 +395,18 @@ Charts security
 
 PGP - Gnu PG 
 
-gpg --full-generate-key    ## type of key RSA and RSA , Keysize 3072 ,
+gpg --full-generate-key    ## type of key RSA and RSA , Keysize 3072 ,  ( email which entered here will act as the alias for this key)
 
 KBX to gpg conversion  ( KBX format is not supported in helm // need to revalidate )
 
 gpg --export-secret-keys > ~/secring.gpg 
+
+helm package --sign --key email@gmail.com --keyring ~/secring.gpg  <chartname> -d <directory>
+
+helm verify <charts_dir>/<chartname>.tgz  --keyring <key_file>
+
+Verify & Install 
+
+helm install --verify --keyring ~/secring.gpg <release_name> <reponame>/<chart_name>
 
 

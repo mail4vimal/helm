@@ -243,6 +243,8 @@ https://att-c.udemycdn.com/2022-02-22_04-38-01-ad0b70725d3bfddb8aa4488491edd819/
                service:
                   type: NodePort
                   nodePort: 30788
+            fullnameOverride: docker-mysql ### depended pods will in defaultly creates pods with charts name , we can override with this config .
+            initdbScriptsConfigMap: mysql-initdb-config ### configmap which uses for the creation of the mysql dependency application
 
 Read the values from the child chart to parent chart .
 
@@ -409,4 +411,40 @@ Verify & Install
 
 helm install --verify --keyring ~/secring.gpg <release_name> <reponame>/<chart_name>
 
+
+Helm Starters - Allow us to create an application chart (by reusing, the code which was hard corded )
+----
+
+helm env HELM_DATA_HOME  ## Where helm expects the starters to be there in this location ( under a folder called "starters" in this location )
+
+helm create --starter springbootmysql chartname 
+
+## How to create the starter chart from existing chart 
+
+from the charts , all yaml file inside templates , charts.yaml , values.yaml test/* - replace the hardcorded chartname with <CHARTNAME> 
+
+
+Plugins
+
+helm plugin list
+helm plugin update <plugin_name>
+helm plugin remove <plugin_name>
+helm plugin install <URL / local path >
+
+helm <plugin_name> 
+
+Ref: https://github.com/salesforce/helm-starter
+https://helm.sh/docs/topics/plugins/
+
+Helm schema validation 
+
+can do the schema validation for the values.yaml , 
+
+How to create the json schema for values.yaml 
+
+> Convert values.yaml to json file 
+> then generate a json schema with it 
+
+https://www.json2yaml.com/
+https://jsonschema.net/app/schemas/0
 
